@@ -1,0 +1,116 @@
+* Elixir Portal
+
+  [[./etc/portal-list.jpg]]
+
+  Elixir portal is a git repository containing the
+  [[https://www.howistart.org/posts/elixir/1][Elixir Portal tutorial]] by
+  José Valim, formatted for a workshop at Kinetic Café.
+
+  Each stage in the tutorial is separated into its own commit, tagged by
+  number. To see the project right after the initial mix project has been
+  created, for example, run =git checkout one=.
+
+** Add mix project (tag: one)
+   - [[https://www.howistart.org/posts/elixir/1#our-first-project]]
+   - Mixfile: stores project deps, etc
+   - Built-in tests with ExUnit
+   - Adds .gitignore and README!
+
+** Model Portal.Door with an Agent (tag: two)
+   - [[https://www.howistart.org/posts/elixir/1#modeling-portal-doors-with-agents]]
+   - Agents are simple abstractions on state:
+
+     #+BEGIN_SRC elixir
+     iex> {:ok, agent} = Agent.start_link(fn -> [] end)
+     {:ok, #PID<0.61.0>}
+     iex> Agent.get(agent, fn list -> list end)
+     []
+     iex> Agent.update(agent, fn list -> [0|list] end)
+     :ok
+     iex> Agent.get(agent, fn list -> list end)
+     [0]
+     #+END_SRC
+
+   - Agents (and processes) can be registered to names (atoms)
+   - Basic implementation of an agent in [[etc/reagent.exs]]
+   - Portal.Door: wraps an agent
+
+     #+BEGIN_SRC elixir
+     iex> Portal.Door.start_link(:pink)
+     {:ok, #PID<0.68.0>}
+     iex> Portal.Door.get(:pink)
+     []
+     iex> Portal.Door.push(:pink, 1)
+     :ok
+     iex> Portal.Door.get(:pink)
+     [1]
+     iex> Portal.Door.pop(:pink)
+     {:ok, 1}
+     iex> Portal.Door.get(:pink)
+     []
+     iex> Portal.Door.pop(:pink)
+     :error
+     #+END_SRC
+
+   - Call =h Portal.Door.start_link= for docs
+
+** Add Portal.transfer and Portal.push_right (tag: three)
+   - [[https://www.howistart.org/posts/elixir/1#portal-transfers]]
+   - Structs:
+
+     #+BEGIN_SRC elixir
+     iex> defmodule User do
+     ...>   defstruct [:name, :age]
+     ...> end
+     iex> user = %User{name: "john doe", age: 27}
+     %User{name: "john doe", age: 27}
+     iex> user.name
+     "john doe"
+     iex> %User{age: age} = user
+     %User{name: "john doe", age: 27}
+     iex> age
+     27
+     #+END_SRC
+
+   - Portal struct holds left and right doors
+   - push_right pops data from left and pushes to right
+
+** Inspect Portals with Protocols (tag: four)
+   - [[https://www.howistart.org/posts/elixir/1#inspecting-portals-with-protocols]]
+   - Implement the Inspect protocol for the Portal struct
+   - The Inspect protocol already exists; we're just extending it
+   - [[http://elixir-lang.org/getting-started/protocols.html][More info on protocols]]
+
+** Add Portal Doors to the Supervision Tree (tag: five)
+   - [[https://www.howistart.org/posts/elixir/1#shooting-supervised-doors]]
+   - Shutting down one of the door processes breaks the portal:
+
+     #+BEGIN_SRC elixir
+       iex> Portal.Door.start_link(:orange)
+       iex> Portal.Door.start_link(:orange)
+       {:ok, #PID<0.59.0>}
+       iex> Portal.Door.start_link(:blue)
+       {:ok, #PID<0.61.0>}
+       iex> portal = Portal.transfer(:orange, :blue, [1, 2, 3])
+
+       # Unlink the door from the shell to prevent the shell from crashing
+       iex> Process.unlink(Process.whereis(:blue))
+       true
+       # Send a shutdown exit signal to the blue agent
+       iex> Process.exit(Process.whereis(:blue), :shutdown)
+       true
+
+       iex> Portal.push_right(portal)
+       * * (exit) exited in: :gen_server.call(:blue, ..., 5000)
+             ** (EXIT) no process
+                   (stdlib) gen_server.erl:190: :gen_server.call/3
+                   (portal) lib/portal.ex:25: Portal.push_right/1
+     #+END_SRC
+
+   - Add a Portal.shoot function that starts a supervised door
+   - The supervisor monitors the process and restarts it on crash
+
+** Add ex_doc (tag: six)
+   - Add ex_doc depenendencies to mix.exs: [[https://github.com/elixir-lang/ex_doc][instructions]]
+   - Run =mix deps.get=
+   - Run =mix docs=
